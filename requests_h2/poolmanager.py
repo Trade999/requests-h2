@@ -54,10 +54,11 @@ def _default_key_normalizer(key_class, request_context):
 
 class PoolManager(RequestMethods):
 
-    def __init__(self, num_pools=10, headers=None, **connection_pool_kw):
+    def __init__(self, num_pools=10, headers=None, http2=False, **connection_pool_kw):
         RequestMethods.__init__(self, headers)
         self.connection_pool_kw = dict(connection_pool_kw)
         self.pools = RecentlyUsedContainer(num_pools, dispose_func=lambda p: p.close())
+        self._http2 = http2
 
     def __enter__(self):
         return self
@@ -69,8 +70,19 @@ class PoolManager(RequestMethods):
 
     def _new_pool(self, verify, cert, trust_env, request_context=None):
         request_context = dict(request_context or self.connection_pool_kw)
+        
+        # Esorina ny http2 ao amin'ny request_context raha misy mba tsy handoza indroa
+        request_context.pop('http2', None)
+        request_context.pop('key_http2', None)
+        
         ssl_context = create_ssl_context(verify=verify, cert=cert, trust_env=trust_env)
-        return httpcore.ConnectionPool(ssl_context=ssl_context, http1=False, http2=True, **request_context)
+        # HTTP/1.1 raha tsy http2, HTTP/2 raha http2
+        return httpcore.ConnectionPool(
+            ssl_context=ssl_context,
+            http1=not self._http2,
+            http2=self._http2,
+            **request_context
+        )
 
     def clear(self):
         self.pools.clear()
@@ -99,7 +111,7 @@ class PoolManager(RequestMethods):
 
 class ProxyManager(PoolManager):
 
-    def __init__(self, proxy_url, proxy_headers=None, **connection_pool_kw):
+    def __init__(self, proxy_url, proxy_headers=None, http2=False, **connection_pool_kw):
         proxy = parse_url(proxy_url)
 
         if proxy.scheme not in ("http", "https"):
@@ -118,15 +130,23 @@ class ProxyManager(PoolManager):
         self.proxy_headers = dict(proxy_headers or {})
         connection_pool_kw["_proxy"] = self.proxy
         connection_pool_kw["_proxy_headers"] = self.proxy_headers
-        super().__init__(**connection_pool_kw)
+        self._http2 = http2
+        super().__init__(http2=http2, **connection_pool_kw)
 
     def _new_pool(self, verify, cert, trust_env, request_context=None):
         request_context = dict(request_context or self.connection_pool_kw)
+        
+        # Esorina ny http2 ao amin'ny request_context raha misy
+        request_context.pop('http2', None)
+        request_context.pop('key_http2', None)
+        
         ssl_context = create_ssl_context(verify=verify, cert=cert, trust_env=trust_env)
         return httpcore.HTTPProxy(
             proxy_url=self.proxy_url,
             proxy_auth=self.proxy_auth,
             proxy_headers=self.proxy_headers,
             ssl_context=ssl_context,
-            http1=False, http2=True, **request_context
+            http1=not self._http2,
+            http2=self._http2,
+            **request_context
         )

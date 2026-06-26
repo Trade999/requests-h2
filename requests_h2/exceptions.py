@@ -1,4 +1,4 @@
-from requests import Timeout, RequestException
+from requests import Timeout, RequestException, ConnectionError
 
 
 class ReadError(RequestException):
@@ -53,3 +53,6 @@ class WriteTimeout(Timeout):
     """
      compat for `httpcore.WriteError`
      """
+
+# Avelao ny ConnectionError ho an'ny requests
+# fa amin'ny fanovana natao dia NetworkError no ho avoaka

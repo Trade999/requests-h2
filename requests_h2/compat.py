@@ -56,7 +56,7 @@ HTTPCORE_EXC_MAP = {
     httpcore.WriteTimeout: WriteTimeout,
     httpcore.PoolTimeout: PoolTimeout,
     httpcore.NetworkError: NetworkError,
-    httpcore.ConnectError: ConnectionError,
+    httpcore.ConnectError: NetworkError,  # <-- Novana ho NetworkError
     httpcore.ReadError: ReadError,
     httpcore.WriteError: WriteError,
     httpcore.ProxyError: ProxyError,

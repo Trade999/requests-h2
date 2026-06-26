@@ -13,7 +13,7 @@ from requests.utils import (
 )
 from requests.exceptions import InvalidProxyURL
 from requests.cookies import extract_cookies_to_jar
-from requests.adapters import BaseAdapter, HTTPAdapter as _HTTPAdapter
+from requests.adapters import BaseAdapter
 
 from .poolmanager import PoolManager, ProxyManager
 from .compat import MockHTTPResponse, map_httpcore_exceptions
@@ -39,51 +39,21 @@ def _get_reason_phrase(status_code):
     return ""
 
 
-class HTTPAdapter(_HTTPAdapter):
-
-    def build_response(self, req, resp):
-        response = Response()
-
-        # Fallback to None if there's no status_code, for whatever reason.
-        response.status_code = getattr(resp, "status", None)
-
-        # Make headers case-insensitive.
-        response.headers = CaseInsensitiveDict(getattr(resp, "headers", {}))
-
-        # Set encoding.
-        response.encoding = _encoding_from_content_type(response.headers)
-        if resp.version:
-            response.version = f"HTTP/{float(resp.version / 10)}"
-        else:
-            response.version = "UNKNOWN"
-        response.raw = resp
-        response.reason = response.raw.reason
-
-        if isinstance(req.url, bytes):
-            response.url = req.url.decode("utf-8")
-        else:
-            response.url = req.url
-
-        # Add new cookies from the server.
-        extract_cookies_to_jar(response.cookies, req, resp)
-
-        # Give the Response some context.
-        response.request = req
-        response.connection = self
-
-        return response
-
-
 class HTTP2Adapter(BaseAdapter):
+    """
+    Adapter tokana ho an'ny HTTP/1.1 sy HTTP/2.
+    Ny exception rehetra dia avy amin'ny exceptions manokana.
+    """
 
     def __init__(self, num_pools=10, pool_connections=100, pool_maxsize=100,
-                 keepalive_expiry=10, max_retries=0):
+                 keepalive_expiry=10, max_retries=0, http2=False):
         super().__init__()
         self._num_pools = num_pools
         self._pool_connections = pool_connections
         self._pool_maxsize = pool_maxsize
         self._keepalive_expiry = keepalive_expiry
         self._max_retries = max_retries
+        self._http2 = http2
 
         self._context = {
             'max_connections': pool_maxsize,
@@ -92,7 +62,11 @@ class HTTP2Adapter(BaseAdapter):
             'retries': max_retries
         }
 
-        self.poolmanager = PoolManager(num_pools=num_pools, **self._context)
+        self.poolmanager = PoolManager(
+            num_pools=num_pools,
+            http2=http2,
+            **self._context
+        )
         self.proxy_manager = {}
 
     def proxy_manager_for(self, proxy):
@@ -102,6 +76,7 @@ class HTTP2Adapter(BaseAdapter):
             manager = self.proxy_manager[proxy] = ProxyManager(
                 proxy,
                 num_pools=self._num_pools,
+                http2=self._http2,
                 **self._context,
             )
         else:
@@ -111,7 +86,13 @@ class HTTP2Adapter(BaseAdapter):
 
     def get_connection(self, url, proxies=None, verify=False, cert=None, trust_env=True):
         proxy = select_proxy(url, proxies)
-        context = dict(verify=verify, cert=cert, trust_env=trust_env, **self._context)
+        context = dict(
+            verify=verify,
+            cert=cert,
+            trust_env=trust_env,
+            http2=self._http2,
+            **self._context
+        )
         if proxy:
             proxy = prepend_scheme_if_needed(proxy, "http")
             proxy_url = parse_url(proxy)
@@ -165,6 +146,7 @@ class HTTP2Adapter(BaseAdapter):
         )
         conn = self.get_connection(request.url, proxies, verify, cert, trust_env)
 
+        # Mampiasa map_httpcore_exceptions foana mba hitoviana ny exception
         with map_httpcore_exceptions():
             resp = conn.handle_request(req)
 

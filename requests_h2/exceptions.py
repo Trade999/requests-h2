@@ -1,55 +1,57 @@
 from requests import Timeout, RequestException
+from requests.exceptions import ConnectionError
 
 
 class ReadError(RequestException):
-    """
-    compat for `httpcore.ReadError`
-    """
+    """Compatibility exception for ``httpcore.ReadError``."""
 
 
 class WriteError(RequestException):
-    """
-    compat for `httpcore.WriteError`
-    """
+    """Compatibility exception for ``httpcore.WriteError``."""
 
 
-class NetworkError(RequestException):
-    """
-    compat for `httpcore.NetworkError`
+class NetworkError(ConnectionError):
+    """Unified network/connection exception.
+
+    This is intentionally a subclass of ``requests.exceptions.ConnectionError``
+    so existing Requests-style exception handling remains compatible::
+
+        except NetworkError:
+            ...
+
+    and::
+
+        except requests.exceptions.ConnectionError:
+            ...
+
+    both catch this exception.
     """
 
 
 class UnsupportedProtocol(RequestException):
-    """
-    compat for `httpcore.UnsupportedProtocol`
-    """
+    """Compatibility exception for ``httpcore.UnsupportedProtocol``."""
 
 
 class ProtocolError(RequestException):
-    """
-    compat for `httpcore.ProtocolError`
-    """
+    """Compatibility exception for ``httpcore.ProtocolError``."""
 
 
 class LocalProtocolError(RequestException):
-    """
-    compat for `httpcore.LocalProtocolError`
-    """
+    """Compatibility exception for ``httpcore.LocalProtocolError``."""
 
 
-class RemoteProtocolError(RequestException):
-    """
-    compat for `httpcore.RemoteProtocolError`
+class RemoteProtocolError(NetworkError):
+    """Backward-compatible alias type for remote protocol failures.
+
+    New transport exception mapping raises ``NetworkError`` directly for
+    ``httpcore.RemoteProtocolError``.  The class remains exported so imports
+    from older versions do not break.
     """
 
 
 class PoolTimeout(Timeout):
-    """
-    compat for `httpcore.PoolTimeout`
-    """
+    """Compatibility exception for ``httpcore.PoolTimeout``."""
 
 
 class WriteTimeout(Timeout):
-    """
-     compat for `httpcore.WriteError`
-     """
+    """Compatibility exception for ``httpcore.WriteTimeout``."""

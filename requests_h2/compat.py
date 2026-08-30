@@ -28,27 +28,56 @@ from .decoders import _get_decoder
 
 @contextlib.contextmanager
 def map_httpcore_exceptions():
+    """Translate httpcore transport failures into Requests-style exceptions.
+
+    Connection/network failures are deliberately unified as ``NetworkError``.
+    Timeouts remain distinct because callers commonly need to handle them
+    separately.
+    """
     try:
         yield
     except Exception as exc:  # noqa: PIE-786
-        mapped_exc = None
+        # Timeouts first: they are intentionally *not* collapsed into
+        # NetworkError.
+        if isinstance(exc, httpcore.ConnectTimeout):
+            raise ConnectTimeout(str(exc)) from exc
+        if isinstance(exc, httpcore.ReadTimeout):
+            raise ReadTimeout(str(exc)) from exc
+        if isinstance(exc, httpcore.WriteTimeout):
+            raise WriteTimeout(str(exc)) from exc
+        if isinstance(exc, httpcore.PoolTimeout):
+            raise PoolTimeout(str(exc)) from exc
+        if isinstance(exc, httpcore.TimeoutException):
+            raise Timeout(str(exc)) from exc
 
-        for from_exc, to_exc in HTTPCORE_EXC_MAP.items():
-            if not isinstance(exc, from_exc):
-                continue
-            # We want to map to the most specific exception we can find.
-            # Eg if `exc` is an `httpcore.ReadTimeout`, we want to map to
-            # `httpx.ReadTimeout`, not just `httpx.TimeoutException`.
-            if mapped_exc is None or issubclass(to_exc, mapped_exc):
-                mapped_exc = to_exc
+        # Unified connection/network family.
+        if isinstance(
+            exc,
+            (
+                httpcore.NetworkError,
+                httpcore.ConnectError,
+                httpcore.ReadError,
+                httpcore.WriteError,
+                httpcore.RemoteProtocolError,
+                httpcore.ProxyError,
+            ),
+        ):
+            raise NetworkError(str(exc)) from exc
 
-        if mapped_exc is None:  # pragma: no cover
-            raise
+        # Client-side/local protocol failures are not classified as network
+        # failures because they may indicate an invalid request produced by
+        # the caller.
+        if isinstance(exc, httpcore.LocalProtocolError):
+            raise LocalProtocolError(str(exc)) from exc
+        if isinstance(exc, httpcore.ProtocolError):
+            raise ProtocolError(str(exc)) from exc
+        if isinstance(exc, httpcore.UnsupportedProtocol):
+            raise UnsupportedProtocol(str(exc)) from exc
 
-        message = str(exc)
-        raise mapped_exc(message) from exc
+        raise
 
 
+# Kept as public compatibility metadata for callers that imported it.
 HTTPCORE_EXC_MAP = {
     httpcore.TimeoutException: Timeout,
     httpcore.ConnectTimeout: ConnectTimeout,
@@ -56,15 +85,16 @@ HTTPCORE_EXC_MAP = {
     httpcore.WriteTimeout: WriteTimeout,
     httpcore.PoolTimeout: PoolTimeout,
     httpcore.NetworkError: NetworkError,
-    httpcore.ConnectError: ConnectionError,
-    httpcore.ReadError: ReadError,
-    httpcore.WriteError: WriteError,
-    httpcore.ProxyError: ProxyError,
+    httpcore.ConnectError: NetworkError,
+    httpcore.ReadError: NetworkError,
+    httpcore.WriteError: NetworkError,
+    httpcore.ProxyError: NetworkError,
     httpcore.UnsupportedProtocol: UnsupportedProtocol,
     httpcore.ProtocolError: ProtocolError,
     httpcore.LocalProtocolError: LocalProtocolError,
-    httpcore.RemoteProtocolError: RemoteProtocolError,
+    httpcore.RemoteProtocolError: NetworkError,
 }
+
 
 
 class _CookieCompatResponse:

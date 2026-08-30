@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="requests-h2",
-    version="1.2",
+    version="1.3",
     author="Trade999",
     url="https://github.com/Trade999/requests-h2",
     description="Bibliothèque Python permettant d'utiliser facilement les requêtes HTTP/2 avec une interface proche de requests.",

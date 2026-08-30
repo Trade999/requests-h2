@@ -1,7 +1,8 @@
-from requests.exceptions import InvalidSchema
+from requests.exceptions import InvalidSchema, ConnectionError
 from requests.sessions import Session as _Session
 
 from .adapters import HTTPAdapter, HTTP2Adapter
+from .exceptions import NetworkError
 
 
 class Session(_Session):
@@ -59,7 +60,14 @@ class Session(_Session):
     def send(self, request, **kwargs):
         if self.http2:
             kwargs.setdefault("trust_env", self.trust_env)
-        return super().send(request, **kwargs)
+        try:
+            return super().send(request, **kwargs)
+        except NetworkError:
+            raise
+        except ConnectionError as exc:
+            # Unify Requests/urllib3 HTTP/1.x connection failures with the
+            # native httpcore HTTP/2 transport exception model.
+            raise NetworkError(str(exc)) from exc
 
     def close(self):
         """Closes all adapters and as such the session"""

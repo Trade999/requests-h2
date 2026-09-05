@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="requests-h2",
-    version="1.3",
+    version="1.4",
     author="Trade999",
     url="https://github.com/Trade999/requests-h2",
     description="Bibliothèque Python permettant d'utiliser facilement les requêtes HTTP/2 avec une interface proche de requests.",
@@ -22,6 +22,7 @@ comme une meilleure gestion des connexions, des performances améliorées et une
         "urllib3>=1.26.0",
         "httpcore>=0.17.0",
         "certifi>=2023.0.0",
+        "anyio"
     ],
     extras_require={
         "brotli": [
